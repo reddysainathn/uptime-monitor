@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.uptime.monitor</string>
+  <!-- REPLACE __REPO__ with your folder, __PY__ with `which python3` (install.sh does this) -->
+  <key>ProgramArguments</key>
+  <array><string>__PY__</string><string>-m</string><string>src.monitor</string></array>
+  <key>WorkingDirectory</key><string>__REPO__</string>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>5</integer>
+  <!-- No StandardOutPath: output goes to unified logging (auto-managed, never bloats).
+       The app keeps its own capped rotating log next to the database. -->
+</dict>
+</plist>

@@ -1,0 +1,36 @@
+# --- UptimeMonitor: tiny, local-only, no uploads ---
+# Generated at runtime (never commit your internet history)
+data/
+reports/
+dashboard/index.html
+# Agent tooling (local-only, not part of the project)
+.opencode/
+.kilo/
+*.kilo
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*~
+dist/
+build/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs / DB leftovers
+*.log
+*.db
+*.db-wal
+*.db-shm

@@ -1,0 +1,52 @@
+#!/bin/sh
+# UptimeMonitor service switch. One command to remember:
+#   sh scripts/uptime-monitor on      # enable background monitoring
+#   sh scripts/uptime-monitor off     # disable (keeps all logged data)
+#   sh scripts/uptime-monitor status  # is it running? show dashboard + data dir
+#   sh scripts/uptime-monitor logs    # tail the monitor log
+set -eu
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+CMD="${1:-status}"
+OS="$(uname -s)"
+PLIST="$HOME/Library/LaunchAgents/com.uptime.monitor.plist"
+SVC="uptime-monitor.service"
+
+datadir() { python3 -c "import sys; sys.path.insert(0, '$REPO'); from src.paths import data_dir; print(data_dir())"; }
+alive() { curl -s -m 3 http://127.0.0.1:8899/api/status >/dev/null 2>&1; }
+
+case "$CMD" in
+  on)
+    if [ "$OS" = "Darwin" ]; then
+      [ -f "$PLIST" ] || { echo "not installed; run: sh scripts/install.sh"; exit 1; }
+      launchctl load "$PLIST" 2>/dev/null || launchctl bootstrap "gui/$(id -u)" "$PLIST"
+    elif [ "$OS" = "Linux" ]; then
+      systemctl --user enable --now "$SVC"
+    else
+      echo "Windows: run scripts/install_windows.bat, then use Task Scheduler."
+      exit 1
+    fi
+    sleep 8
+    alive && echo "ON  — dashboard http://127.0.0.1:8899" || { echo "started but dashboard not answering yet"; exit 1; }
+    ;;
+  off)
+    if [ "$OS" = "Darwin" ]; then
+      launchctl unload "$PLIST" 2>/dev/null || launchctl bootout "gui/$(id -u)" "$PLIST" 2>/dev/null || true
+    elif [ "$OS" = "Linux" ]; then
+      systemctl --user disable --now "$SVC" || true
+    fi
+    sleep 1
+    alive && { echo "STILL RUNNING (check manually)"; exit 1; } || echo "OFF — data kept at $(datadir)"
+    ;;
+  logs)
+    tail -f "$(datadir)/monitor.log"
+    ;;
+  status|*)
+    if [ "$OS" = "Darwin" ]; then
+      launchctl list 2>/dev/null | grep -i uptime || echo "(no launchd job loaded)"
+    elif [ "$OS" = "Linux" ]; then
+      systemctl --user is-active "$SVC" || true
+    fi
+    echo "data: $(datadir)"
+    if alive; then echo "dashboard: http://127.0.0.1:8899 (answering)"; else echo "dashboard: not answering"; fi
+    ;;
+esac

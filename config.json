@@ -1,0 +1,28 @@
+{
+  "check_interval_sec": 1.0,
+  "fail_threshold": 2,
+  "success_threshold": 2,
+  "ping_timeout_sec": 0.8,
+  "tcp_timeout_sec": 2.0,
+  "ping_targets": [
+    "1.1.1.1",
+    "8.8.8.8",
+    "9.9.9.9"
+  ],
+  "tcp_check": {
+    "host": "1.1.1.1",
+    "port": 443
+  },
+  "sleep_gap_sec": 5.0,
+  "dashboard_port": 8899,
+  "dashboard_regen_sec": 10,
+  "auto_open_enabled": true,
+  "auto_open_after_sec": 30,
+  "auto_open_cooldown_sec": 600,
+  "isp_details_enabled": true,
+  "isp_owns_router": false,
+  "report_retain_days": 30,
+  "report_retain_count": 20,
+  "report_max_mb": 5.0,
+  "timezone": "local"
+}

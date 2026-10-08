@@ -1,0 +1,14 @@
+[Unit]
+Description=Tiny internet uptime monitor (1s checks, local only)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=__REPO__
+ExecStart=__PY__ -m src.monitor
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

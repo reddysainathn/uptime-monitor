@@ -1,0 +1,1 @@
+# stdlib only — no third-party installs needed. Python 3.9+ (tested 3.9–3.13).
