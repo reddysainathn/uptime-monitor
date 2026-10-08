@@ -107,6 +107,14 @@ def _load_json(p):
         return {}
 
 
+def _esc_attr(s):
+    """Escape a value for an HTML attribute (the eye-toggle stores the real value here)."""
+    try:
+        return str(s).replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;").replace(">", "&gt;")
+    except Exception:
+        return ""
+
+
 def _router_flag(dd):
     """True if the router/modem is the ISP's own box (e.g. built into the wall).
     Personal setting: data-dir override wins, repo config is the default."""
@@ -206,18 +214,24 @@ def generate(db_path, out_html, reports_dir=None, _db_path_ignored=None):
         det = ipinfo.get("details") or {}
         loc = " ".join(x for x in (det.get("city", ""), det.get("regionName", ""), det.get("country", "")) if x)
         crows = [
-            ("Using", medium + ((" · network “%s”" % ssid) if ssid and "WiFi" in medium else "")),
-            ("Downloaded", "%s · %s" % (_fmt_bytes(rx_tot), _fmt_bytes(rx_sess))),
-            ("Uploaded", "%s · %s" % (_fmt_bytes(tx_tot), _fmt_bytes(tx_sess))),
-            ("Your public IP", ipinfo.get("public_ip", "—looking up…—")),
-            ("Provider", det.get("isp", "—looking up…—")),
-            ("Network ID (ASN)", det.get("as", "—")),
-            ("Area", loc or "—"),
+            ("Using", medium + ((" · network “%s”" % ssid) if ssid and "WiFi" in medium else ""), True),
+            ("Downloaded", "%s · %s" % (_fmt_bytes(rx_tot), _fmt_bytes(rx_sess)), False),
+            ("Uploaded", "%s · %s" % (_fmt_bytes(tx_tot), _fmt_bytes(tx_sess)), False),
+            ("Your public IP", ipinfo.get("public_ip", "—looking up…—"), True),
+            ("Provider", det.get("isp", "—looking up…—"), True),
+            ("Network ID (ASN)", det.get("as", "—"), True),
+            ("Area", loc or "—", True),
             ("Home IP / router / DNS",
              "%s · %s · %s" % (ipinfo.get("local_ip", "—"), ipinfo.get("gateway", "—"),
-                               ", ".join(ipinfo.get("dns", []) or ["—"]))),
+                               ", ".join(ipinfo.get("dns", []) or ["—"])), True),
         ]
-        crows_h = "".join("<div class=krow><span>%s</span><b>%s</b></div>" % r for r in crows)
+
+        def _privcell(val, sensitive):
+            if sensitive:
+                return "<b><span class=priv data-v=\"%s\">%s</span></b>" % (_esc_attr(val), val)
+            return "<b>%s</b>" % val
+
+        crows_h = "".join("<div class=krow><span>%s</span>%s</div>" % (k, _privcell(v, s)) for k, v, s in crows)
         try:
             from .speedtest import last_result as _last_sp
             _sp = _last_sp(dd)
@@ -380,7 +394,7 @@ input{padding:7px;border:1px solid #cbd5e1;border-radius:8px;margin:2px;font-siz
 <div class=sec><h2>3 · Which days are worst?</h2><p class=why>Last 30 days. Darker red = more outages that day. Gray = clean.</p>
 <div class=hm>%s</div></div>
 
-<div class=sec><h2>4 · Your connection</h2><p class=why>What you're on right now and how much data has flowed through it. Left figure = since computer started · right = since monitor started.</p>
+<div class=sec><h2>4 · Your connection <button class=mini id=privBtn onclick="togglePriv()" title="Hide sensitive details">👁</button></h2><p class=why>What you're on right now and how much data has flowed through it. Left figure = since computer started · right = since monitor started.</p>
 %s
 <p class=noprint><button class=btn onclick="openSpeed()">Speed test</button> <span class=sub id=lastspeed>%s</span></p></div>
 
@@ -414,6 +428,11 @@ setInterval(function(){fetch('/api/status').then(r=>r.json()).then(s=>{
 }).catch(function(){});},5000);
 function fmtDur(s){s=Math.floor(s);if(s<60)return s+'s';var m=Math.floor(s/60);if(m<60)return m+'m '+(s%%60)+'s';var hh=Math.floor(m/60);return hh+'h '+(m%%60)+'m';}
 function mkRep(d){fetch('/api/report?days='+d,{method:'POST'}).then(r=>r.json()).then(()=>location.reload());}
+function togglePriv(){var h=true;try{h=localStorage.getItem('privHidden')!=='1';}catch(e){}privHide(h);}
+function privHide(hide){try{localStorage.setItem('privHidden',hide?'1':'0');}catch(e){}
+ document.querySelectorAll('.priv').forEach(function(el){el.textContent=hide?'••••••':el.getAttribute('data-v');});
+ var b=document.getElementById('privBtn');if(b){b.textContent=hide?'🙈':'👁';b.title=hide?'Show sensitive details':'Hide sensitive details';}}
+try{if(localStorage.getItem('privHidden')==='1')privHide(true);}catch(e){}
 function cleanReps(){if(confirm('Delete old reports (keeps newest within limits)?'))fetch('/api/reports/clean',{method:'POST'}).then(r=>r.json()).then(()=>location.reload());}
 function delRep(n){if(confirm('Delete '+n+'?'))fetch('/api/reports/'+n,{method:'DELETE'}).then(()=>location.reload());}
 fetch('/api/config').then(r=>r.json()).then(c=>{

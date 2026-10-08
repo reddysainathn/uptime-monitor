@@ -86,6 +86,9 @@ class TestNetcheck(unittest.TestCase):
             self.assertIn("Your connection", html)
             self.assertIn("Proof for your provider", html)
             self.assertIn("7-day verdict", html)
+            self.assertIn("privBtn", html)
+            self.assertIn("togglePriv", html)
+            self.assertIn("class=priv", html)
 
 
 class TestReports(unittest.TestCase):
