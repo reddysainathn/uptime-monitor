@@ -373,9 +373,9 @@ input{padding:7px;border:1px solid #cbd5e1;border-radius:8px;margin:2px;font-siz
 @media print{.btn,.btn2,.mini,details.settings,.noprint{display:none}body{background:#fff}}
 </style></head><body>
 <div class=top><h1>🏠 Internet Uptime</h1>
-<div class=live><b id=livedot>● LIVE</b> · updated %s · charts refresh every few seconds</div></div>
+<div class=live><b id=livedot>● LIVE · %s</b> · updated %s · charts refresh every few seconds <button class=mini onclick="pollStatus()" title="Refresh status now">⟳</button></div></div>
 
-<div class=hero id=hero style='background:%s'><span class=hlive id=livedot>● LIVE</span><span class=hstate id=heroState>%s</span><span class=hfor id=heroFor>for %s · %s</span></div>
+<div class=hero id=hero style='background:%s'><span class=hlive id=herolive>● LIVE</span><span class=hstate id=heroState>%s</span><span class=hfor id=heroFor>for %s · %s</span></div>
 <div class=advline id=heroAdv>%s</div>
 
 <div class="verdictline %s">📋 <b>7-day verdict:</b> %s — %s</div>
@@ -418,14 +418,14 @@ try{var sy=sessionStorage.getItem('sy');if(sy)window.scrollTo(0,+sy);}catch(e){}
 window.addEventListener('beforeunload',function(){try{sessionStorage.setItem('sy',window.scrollY);}catch(e){}});
 function heroColor(s){return s==='ONLINE'?'#16a34a':s==='OFFLINE_ISP'?'#dc2626':s==='LOCAL_FAIL'?'#f59e0b':'#6b7280';}
 function heroWord(s){return s==='ONLINE'?'✓ Working':s==='OFFLINE_ISP'?'✗ Internet down':s==='LOCAL_FAIL'?'⚠ Router down':s==='WIFI_OFF'?'⏸ WiFi off':s==='NO_LINK'?'⏸ No connection':'…';}
-setInterval(function(){fetch('/api/status').then(r=>r.json()).then(s=>{
+function pollStatus(){fetch('/api/status').then(r=>r.json()).then(s=>{
  var h=document.getElementById('hero');if(!h)return;
  h.style.background=heroColor(s.state);
  document.getElementById('heroState').textContent=heroWord(s.state);
  var d=Math.max(0,Date.now()/1000-(s.since||Date.now()/1000));
  document.getElementById('heroFor').textContent='for '+fmtDur(d)+' · '+s.medium;
  document.getElementById('livedot').textContent='● LIVE · '+s.state;
-}).catch(function(){});},5000);
+}).catch(function(){});}setInterval(pollStatus,5000);
 function fmtDur(s){s=Math.floor(s);if(s<60)return s+'s';var m=Math.floor(s/60);if(m<60)return m+'m '+(s%%60)+'s';var hh=Math.floor(m/60);return hh+'h '+(m%%60)+'m';}
 function mkRep(d){fetch('/api/report?days='+d,{method:'POST'}).then(r=>r.json()).then(()=>location.reload());}
 function togglePriv(){var h=true;try{h=localStorage.getItem('privHidden')!=='1';}catch(e){}privHide(h);}
@@ -486,7 +486,7 @@ function spShow(s){var bar=document.getElementById('spBar');if(bar)bar.style.wid
 <p><button class=btn onclick="startSpeed()">Start</button><button class="btn btn2" onclick="closeSpeed()">Close</button></p>
 <p class=sub id=spMsg></p></div></div>
 </body></html>""" % (
-            color, TF.fmt(now, "%H:%M:%S", TZ),
+            color, cur_type, TF.fmt(now, "%H:%M:%S", TZ),
             color, word, _fmt_dur(now - cur_since), medium, advice,
             v_tone, v_title, v_sub,
             _stat_card(conn, "Today", today_days, OWN, TZ),

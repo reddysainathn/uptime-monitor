@@ -89,6 +89,8 @@ class TestNetcheck(unittest.TestCase):
             self.assertIn("privBtn", html)
             self.assertIn("togglePriv", html)
             self.assertIn("class=priv", html)
+            self.assertIn("pollStatus", html)
+            self.assertIn("LIVE ·", html)
 
 
 class TestReports(unittest.TestCase):
@@ -454,6 +456,146 @@ class TestPaths(unittest.TestCase):
             with mock.patch.object(Path, "home", return_value=home):
                 with mock.patch.object(P.platform, "system", return_value="Darwin"):
                     self.assertEqual(P.data_dir(), persist)
+
+
+class TestOutageStickiness(unittest.TestCase):
+    """Downtime must stick: a sustained outage stays red, never flaps.
+
+    Regression tests for: red shown ~1s then green again while still down,
+    with the downtime missing from reports.
+    """
+
+    def _make_mon(self, td):
+        import logging
+        from src.monitor import Monitor
+        cfg = {
+            "db_path": str(Path(td) / "t.db"),
+            "check_interval_sec": 1.0, "fail_threshold": 2, "success_threshold": 2,
+            "ping_timeout_sec": 0.8, "tcp_timeout_sec": 2.0,
+            "ping_targets": ["1.1.1.1", "8.8.8.8", "9.9.9.9"],
+            "tcp_check": {"host": "1.1.1.1", "port": 443},
+            "sleep_gap_sec": 5.0, "dashboard_port": 8899, "dashboard_regen_sec": 10,
+            "auto_open_after_sec": 30, "auto_open_cooldown_sec": 600,
+            "auto_open_enabled": False, "isp_details_enabled": False,
+        }
+        return Monitor(cfg, logging.getLogger("test-sticky"), record=True)
+
+    def _drive(self, mon, link_seq, net_ok_seq, gw_ok=True):
+        """Drive mon.sample() with a stubbed network. No real I/O."""
+        from unittest import mock
+        from src import netcheck as probemod
+        n = max(len(link_seq), len(net_ok_seq))
+        states, cur = [], {"net_ok": False}
+        with mock.patch.object(probemod, "get_gateway", return_value="192.168.1.99"), \
+             mock.patch.object(probemod, "get_local_ip", return_value="192.168.1.5"):
+            def fake_ping(host, timeout_sec=0.8):
+                if host == "192.168.1.99":
+                    return 2.0 if gw_ok else None
+                return 7.0 if cur["net_ok"] else None
+
+            def fake_tcp(host="1.1.1.1", port=443, timeout=2.0):
+                return 7.0 if cur["net_ok"] else None
+
+            with mock.patch.object(probemod, "ping", side_effect=fake_ping), \
+                 mock.patch.object(probemod, "tcp_check", side_effect=fake_tcp):
+                for i in range(n):
+                    mon.link = dict(link_seq[i % len(link_seq)])
+                    cur["net_ok"] = net_ok_seq[i % len(net_ok_seq)]
+                    mon.last_slow = time.time()  # skip slow path: link set above
+                    mon.last_tick = time.time()  # no fake sleep gaps
+                    states.append(mon.sample()["state"])
+        return states
+
+    def test_sustained_outage_stays_red(self):
+        with tempfile.TemporaryDirectory() as td:
+            mon = self._make_mon(td)
+            try:
+                link = {"wifi_on": True, "ssid": "Home", "ethernet_up": None}
+                states = self._drive(mon, [link], [False] * 8)
+                self.assertEqual(states[0], "ONLINE")  # 1st fail below threshold
+                self.assertTrue(all(s == "OFFLINE_ISP" for s in states[1:]),
+                                "sustained outage must stay red, got %r" % (states,))
+            finally:
+                mon.close()
+
+    def test_flaky_link_readout_must_not_clear_outage(self):
+        with tempfile.TemporaryDirectory() as td:
+            mon = self._make_mon(td)
+            try:
+                up = {"wifi_on": True, "ssid": "Home", "ethernet_up": None}
+                unknown = {"wifi_on": None, "ssid": "", "ethernet_up": None}
+                states = self._drive(mon, [up, unknown], [False] * 10)
+                self.assertIn("OFFLINE_ISP", states)
+                tail = states[4:]
+                self.assertTrue(all(s == "OFFLINE_ISP" for s in tail),
+                                "flaky link readout must not flap outage, got %r" % (states,))
+                kinds = [r[0] for r in mon.conn.execute("SELECT type FROM events ORDER BY id").fetchall()]
+                self.assertEqual(kinds, ["ONLINE", "OFFLINE_ISP"],
+                                 "outage must be one red event, not fragments: %r" % (kinds,))
+                from src import db as dbmod
+                s = dbmod.stats_since(mon.conn, time.time() - 3600)
+                self.assertEqual(s["outages_isp"], 1)
+            finally:
+                mon.close()
+
+    def test_confirmed_wifi_off_never_blames_isp(self):
+        with tempfile.TemporaryDirectory() as td:
+            mon = self._make_mon(td)
+            try:
+                link = {"wifi_on": False, "ssid": "", "ethernet_up": False}
+                states = self._drive(mon, [link], [False] * 6)
+                self.assertTrue(all(s == "WIFI_OFF" for s in states), states)
+                kinds = [r[0] for r in mon.conn.execute("SELECT type FROM events").fetchall()]
+                self.assertNotIn("OFFLINE_ISP", kinds)
+            finally:
+                mon.close()
+
+    def test_lone_success_does_not_end_outage(self):
+        with tempfile.TemporaryDirectory() as td:
+            mon = self._make_mon(td)
+            try:
+                link = {"wifi_on": True, "ssid": "Home", "ethernet_up": None}
+                states = self._drive(mon, [link],
+                                       [False] * 4 + [True] + [False] * 2 + [True, True])
+                self.assertEqual(states[4], "OFFLINE_ISP",
+                                 "one success must not end an outage, got %r" % (states,))
+                self.assertEqual(states[-1], "ONLINE",
+                                 "two consecutive successes must recover, got %r" % (states,))
+            finally:
+                mon.close()
+
+    def test_single_blip_never_opens_outage(self):
+        with tempfile.TemporaryDirectory() as td:
+            mon = self._make_mon(td)
+            try:
+                link = {"wifi_on": True, "ssid": "Home", "ethernet_up": None}
+                states = self._drive(mon, [link], [False, True, True, True])
+                self.assertTrue(all(s == "ONLINE" for s in states), states)
+                kinds = [r[0] for r in mon.conn.execute("SELECT type FROM events").fetchall()]
+                self.assertNotIn("OFFLINE_ISP", kinds)
+            finally:
+                mon.close()
+
+    def test_always_unknown_link_stays_gray_never_red(self):
+        # Honesty guard: on systems with no usable link readout, a dead
+        # internet must stay gray (NO_LINK), never blame the provider.
+        with tempfile.TemporaryDirectory() as td:
+            mon = self._make_mon(td)
+            try:
+                unknown = {"wifi_on": None, "ssid": "", "ethernet_up": None}
+                states = self._drive(mon, [unknown], [False] * 6)
+                self.assertEqual(states[0], "ONLINE")  # debounce: 1st fail
+                self.assertTrue(all(s == "NO_LINK" for s in states[1:]), states)
+                kinds = [r[0] for r in mon.conn.execute("SELECT type FROM events").fetchall()]
+                self.assertNotIn("OFFLINE_ISP", kinds)
+            finally:
+                mon.close()
+
+    def test_diagnostic_link_shape(self):
+        from src import netcheck as probemod
+        link = probemod.get_link_info()
+        self.assertIn("wifi_on", link)
+        self.assertIn("ethernet_up", link)
 
 
 if __name__ == "__main__":

@@ -152,6 +152,7 @@ class Monitor:
         self.state = "ONLINE"
         self.fail_n = 0
         self.ok_n = 0
+        self.unknown_n = 0  # consecutive failing samples with an unknown link readout
         self.ssid = ""
         self.link = {"wifi_on": None, "ssid": "", "ethernet_up": None}
         self.last_tick = time.time()
@@ -182,6 +183,7 @@ class Monitor:
         self.state = new
         self.fail_n = 0
         self.ok_n = 0
+        self.unknown_n = 0
         if self.record:
             dbmod.open_event(self.conn, new, self.ssid, detail)
 
@@ -250,6 +252,7 @@ class Monitor:
                 self.bump("wifioff")
                 self.fail_n = 0
                 self.ok_n = 0
+                self.unknown_n = 0
                 return {"state": self.state, "latency": None}
 
             gw = netcheck.get_gateway()
@@ -282,6 +285,7 @@ class Monitor:
             if lat is not None:
                 self.ok_n += 1
                 self.fail_n = 0
+                self.unknown_n = 0
                 if self.state in ("OFFLINE_ISP", "LOCAL_FAIL") and self.ok_n >= self.cfg["success_threshold"]:
                     self.set_state("ONLINE", "recovered")
                     self._ip_recheck = True  # reconnects often bring a new IP — re-check soon
@@ -302,19 +306,37 @@ class Monitor:
                             v = "NO_LINK"
                     except Exception:
                         pass
-                if v in ("WIFI_OFF", "NO_LINK"):
-                    # Gray time, never an accusation. WIFI_OFF = confirmed off;
-                    # NO_LINK = nothing usable (off, waking, or reconnecting).
-                    self.set_state(v, "wifi off" if v == "WIFI_OFF"
-                                   else "no usable link (wifi off, waking, or reconnecting)")
+                if v == "WIFI_OFF":
+                    # Gray time, never an accusation. WIFI_OFF = confirmed off.
+                    self.unknown_n = 0
+                    self.set_state(v, "wifi off")
                     self.bump("wifioff")
                     self.fail_n = 0
-                elif self.fail_n >= self.cfg["fail_threshold"] and self.state not in ("OFFLINE_ISP", "LOCAL_FAIL"):
-                    if v == "LOCAL_DOWN":
-                        self.set_state("LOCAL_FAIL",
-                                       "link up, but gateway and internet both unreachable")
+                elif v == "NO_LINK":
+                    # Unknown link (query failed, waking, reconnecting): gray,
+                    # never an accusation — but debounced. One failed OS query
+                    # must not wipe the fail count and hide an ongoing outage,
+                    # and an established outage stays put through link wobble.
+                    self.unknown_n += 1
+                    if self.state in ("OFFLINE_ISP", "LOCAL_FAIL"):
+                        pass  # sticky: tail below keeps counting down/local
                     else:
-                        self.set_state("OFFLINE_ISP", detail + ("" if gw else " (no gateway found)"))
+                        if (self.unknown_n >= self.cfg["fail_threshold"]
+                                and self.fail_n >= self.cfg["fail_threshold"]
+                                and self.state != "NO_LINK"):
+                            self.set_state("NO_LINK",
+                                           "no usable link (wifi off, waking, or reconnecting)")
+                        self.bump("wifioff")
+                else:
+                    # Link positively up: the unknown streak is over.
+                    self.unknown_n = 0
+                    if (self.fail_n >= self.cfg["fail_threshold"]
+                            and self.state not in ("OFFLINE_ISP", "LOCAL_FAIL")):
+                        if v == "LOCAL_DOWN":
+                            self.set_state("LOCAL_FAIL",
+                                           "link up, but gateway and internet both unreachable")
+                        else:
+                            self.set_state("OFFLINE_ISP", detail + ("" if gw else " (no gateway found)"))
                 if self.state in ("OFFLINE_ISP", "LOCAL_FAIL"):
                     self.bump("down" if self.state == "OFFLINE_ISP" else "local")
                     if self.record and self.cfg.get("auto_open_enabled", True):
