@@ -12,7 +12,7 @@
 - `snapshot: true` is on — edits can be undone, but don't rely on it for secrets.
 
 ## Shell
-- Default = `ask`. Only `ls`, `pwd`, `git status/diff/log/branch`, and project test commands (`python3 -m pytest`, `python3 -m unittest`, `python3 -m src.monitor --once`) run without a prompt.
+- Default = `ask`. Prompt-free: `ls`, `pwd`, `git status/diff/log/branch/show` (+ `add`/`commit`/`stash`/`checkout`/`pull`), any `python3 *`, `sh scripts/*`, the `uptime*` aliases, and read-only text utils (`awk`, `sed -n`, `cat`, `head`, `tail`, `wc`, `diff`, `grep`, `sleep`, `uname`, `command`). Everything else still prompts; hard blocks below ignore Allow.
 - NEVER run without explicit approval: `sudo/su`, `rm/rmdir/unlink/shred`, `dd/mkfs/fdisk/parted/diskutil erase`, `chmod/chown`, `shutdown/reboot/halt`, `kill/killall`, `curl|sh`, `eval`, `git push --force`, `git reset --hard`, `git clean -fd`, `docker prune/rm`, `kubectl delete`, `terraform destroy`, `launchctl unload`, `systemctl`, `defaults delete/write`, `scp/rsync/ftp`, `curl -F/--data` (uploads), anything touching `~/.ssh` or `~/.aws`.
 - The `SafetyGuard` plugin hard-blocks the above even if Allow is clicked. If blocked, explain why and offer a safe alternative.
 

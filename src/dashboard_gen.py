@@ -370,10 +370,13 @@ input{padding:7px;border:1px solid #cbd5e1;border-radius:8px;margin:2px;font-siz
 .big3{font-size:30px;font-weight:800}
 .setrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:6px 0;font-size:14px}
 .foot{color:var(--mut);font-size:12.5px;margin-top:14px;display:flex;gap:14px;flex-wrap:wrap}
+.refreshbtn{display:inline-flex;align-items:center;gap:6px;margin-left:8px;padding:7px 16px;border-radius:999px;border:1.5px solid #16a34a;background:#f0fdf4;color:#15803d;font-size:13.5px;font-weight:700;cursor:pointer;white-space:nowrap}
+.refreshbtn:hover{background:#16a34a;color:#fff}
+.refreshbtn:disabled{opacity:.65;cursor:wait}
 @media print{.btn,.btn2,.mini,details.settings,.noprint{display:none}body{background:#fff}}
 </style></head><body>
 <div class=top><h1>🏠 Internet Uptime</h1>
-<div class=live><b id=livedot>● LIVE · %s</b> · updated %s · charts refresh every few seconds <button class=mini onclick="pollStatus()" title="Refresh status now">⟳</button></div></div>
+<div class=live><b id=livedot>● LIVE · %s</b> · updated %s · charts refresh every few seconds <button class=refreshbtn id=refreshBtn onclick="manualRefresh()" title="Refresh status now">⟳ Refresh now</button></div></div>
 
 <div class=hero id=hero style='background:%s'><span class=hlive id=herolive>● LIVE</span><span class=hstate id=heroState>%s</span><span class=hfor id=heroFor>for %s · %s</span></div>
 <div class=advline id=heroAdv>%s</div>
@@ -426,6 +429,7 @@ function pollStatus(){fetch('/api/status').then(r=>r.json()).then(s=>{
  document.getElementById('heroFor').textContent='for '+fmtDur(d)+' · '+s.medium;
  document.getElementById('livedot').textContent='● LIVE · '+s.state;
 }).catch(function(){});}setInterval(pollStatus,5000);
+function manualRefresh(){location.reload();}
 function fmtDur(s){s=Math.floor(s);if(s<60)return s+'s';var m=Math.floor(s/60);if(m<60)return m+'m '+(s%%60)+'s';var hh=Math.floor(m/60);return hh+'h '+(m%%60)+'m';}
 function mkRep(d){fetch('/api/report?days='+d,{method:'POST'}).then(r=>r.json()).then(()=>location.reload());}
 function togglePriv(){var h=true;try{h=localStorage.getItem('privHidden')!=='1';}catch(e){}privHide(h);}

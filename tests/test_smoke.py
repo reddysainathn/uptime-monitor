@@ -323,8 +323,10 @@ class TestSpeed(unittest.TestCase):
 
         class H(BaseHTTPRequestHandler):
             def do_GET(self):
+                import re as _re
                 try:
-                    n = int(self.path.rsplit("bytes=", 1)[-1])
+                    m = _re.search(r"bytes=(\d+)", self.path)
+                    n = int(m.group(1)) if m else 1000
                 except Exception:
                     n = 1000
                 body = b"x" * min(n, 5000000)
@@ -334,8 +336,19 @@ class TestSpeed(unittest.TestCase):
                 self.wfile.write(body)
 
             def do_POST(self):
-                ln = int(self.headers.get("Content-Length", "0") or 0)
-                self.rfile.read(min(ln, 300000))
+                # Drain the full body: real speedtest clients stream
+                # multi-MB bodies with precise send timing; replying early
+                # would reset the client's connection mid-send.
+                try:
+                    ln = int(self.headers.get("Content-Length", "0") or 0)
+                except Exception:
+                    ln = 0
+                left = min(ln, 100000000)
+                while left > 0:
+                    buf = self.rfile.read(min(left, 262144))
+                    if not buf:
+                        break
+                    left -= len(buf)
                 self.send_response(200)
                 self.end_headers()
                 self.wfile.write(b"ok")

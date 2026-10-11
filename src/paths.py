@@ -18,26 +18,40 @@ import sqlite3
 from pathlib import Path
 
 
+def _probe_cleanup(d: Path) -> None:
+    """Remove probe files, including stale ones from crashed/failed probes.
+
+    A leftover hot journal can wedge the next probe, so this runs both
+    before probing and in a finally. Never raises.
+    """
+    for suf in ("", "-journal", "-wal", "-shm"):
+        try:
+            q = d / ("_probe.db" + suf)
+            if q.exists():
+                q.unlink()
+        except Exception:
+            pass
+
+
 def _sqlite_ok(d: Path) -> bool:
     try:
         d.mkdir(parents=True, exist_ok=True)
+        _probe_cleanup(d)
         p = d / "_probe.db"
         c = sqlite3.connect(str(p), timeout=5)
         c.execute("create table if not exists t(x)")
         c.execute("insert into t values (1)")
         c.commit()
         c.close()
-        try:
-            p.unlink()
-            for suf in ("-journal", "-wal", "-shm"):
-                q = Path(str(p) + suf)
-                if q.exists():
-                    q.unlink()
-        except Exception:
-            pass
         return True
     except Exception:
         return False
+    finally:
+        # Failed probes must not litter _probe.db behind (they used to).
+        try:
+            _probe_cleanup(d)
+        except Exception:
+            pass
 
 
 def _has_state(d: Path) -> bool:

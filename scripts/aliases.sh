@@ -9,6 +9,7 @@
 #   uptime          status (is it running? dashboard + data dir)
 #   uptime-on       enable background monitoring
 #   uptime-off      disable (keeps all logged data)
+#   uptime-restart  disable then enable (fresh backend)
 #   uptime-status   same as uptime
 #   uptime-logs     tail the monitor log
 #   uptime-report   build the 7-day ISP report
@@ -30,6 +31,7 @@ $MARK (repo: $REPO — managed by 'sh scripts/aliases.sh', safe to re-run)
 alias uptime="sh \"$REPO/scripts/uptime-monitor\" status"
 alias uptime-on="sh \"$REPO/scripts/uptime-monitor\" on"
 alias uptime-off="sh \"$REPO/scripts/uptime-monitor\" off"
+alias uptime-restart="sh \"$REPO/scripts/uptime-monitor\" restart"
 alias uptime-status="sh \"$REPO/scripts/uptime-monitor\" status"
 alias uptime-logs="sh \"$REPO/scripts/uptime-monitor\" logs"
 alias uptime-report="(cd \"$REPO\" && python3 -m src.report --days 7)"

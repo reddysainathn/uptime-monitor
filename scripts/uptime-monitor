@@ -4,6 +4,7 @@
 #   sh scripts/uptime-monitor off     # disable (keeps all logged data)
 #   sh scripts/uptime-monitor status  # is it running? show dashboard + data dir
 #   sh scripts/uptime-monitor logs    # tail the monitor log
+#   sh scripts/uptime-monitor restart # off then on (fresh backend)
 set -eu
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 CMD="${1:-status}"
@@ -36,6 +37,11 @@ case "$CMD" in
     fi
     sleep 1
     alive && { echo "STILL RUNNING (check manually)"; exit 1; } || echo "OFF — data kept at $(datadir)"
+    ;;
+  restart)
+    sh "$0" off || true
+    sleep 1
+    sh "$0" on
     ;;
   logs)
     tail -f "$(datadir)/monitor.log"

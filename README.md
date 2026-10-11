@@ -25,9 +25,10 @@ Foreground instead of background: `python3 -m src.monitor`
 ```sh
 sh scripts/uptime-monitor on      # enable background monitoring
 sh scripts/uptime-monitor off     # disable — keeps all logged data
+sh scripts/uptime-monitor restart # off then on (fresh backend)
 sh scripts/uptime-monitor status  # is it running? + dashboard + data dir
 sh scripts/uptime-monitor logs    # tail the monitor log
-sh scripts/aliases.sh             # one-time: adds uptime-on/off/status/logs/report/probe/open aliases to bash + zsh
+sh scripts/aliases.sh             # one-time: adds uptime-on/off/restart/status/logs/report/probe/open aliases to bash + zsh
 ```
 
 ## What the colors mean (for you + your ISP)
